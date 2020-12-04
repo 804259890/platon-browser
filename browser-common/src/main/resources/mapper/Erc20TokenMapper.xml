@@ -105,7 +105,7 @@
     select
     <include refid="Base_Column_List" />
     from erc20_token
-    where address = #{address,jdbcType=VARCHAR}
+    where address = #{address,jdbcType=VARCHAR} and scan_show=1
   </select>
 
   <select id="listErc20Token" parameterType="java.util.Map" resultMap="BaseResultMap">
@@ -125,7 +125,7 @@
   <select id="totalErc20Token" parameterType="java.util.Map" resultType="java.lang.Integer">
     select
     count(*) total
-    from erc20_token
+    from erc20_token where scan_show=1
   </select>
 
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
