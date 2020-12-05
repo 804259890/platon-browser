@@ -54,13 +54,15 @@ public class ParameterService {
             config.setName(gp.getParamItem().getName());
             config.setRangeDesc(gp.getParamItem().getDesc());
             config.setActiveBlock(0L);
-            configList.add(config);
+
             config.setCreateTime(date);
             config.setUpdateTime(date);
 
             // 浏览器刚启动时在BlockChainConfig中调用debugEconomicConfig接口取得链刚启动时的参数
             // 所以从零开始同步时，需要从BlockChainConfig取得初始参数值
             String initValue = getValueInBlockChainConfig(config.getName());
+            if(initValue==null) continue;
+            configList.add(config);
             config.setInitValue(initValue);
             config.setStaleValue(initValue);
             ModifiableGovernParamEnum paramEnum = ModifiableGovernParamEnum.getMap().get(gp.getParamItem().getName());
@@ -126,6 +128,7 @@ public class ParameterService {
      */
     public String getValueInBlockChainConfig(String name) {
         ModifiableGovernParamEnum paramEnum = ModifiableGovernParamEnum.getMap().get(name);
+        if(paramEnum==null) return null;
         String staleValue = "";
         switch (paramEnum){
             // 质押相关
