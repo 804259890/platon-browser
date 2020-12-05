@@ -1,0 +1,1 @@
+ALTER TABLE `erc20_token` ADD COLUMN `scan_show` int(11)   NOT NULL DEFAULT 0 COMMENT '是否在浏览器中显示: 0-不显示,1-显示' after `create_time` ;
