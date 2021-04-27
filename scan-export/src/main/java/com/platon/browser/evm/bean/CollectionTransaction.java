@@ -1,5 +1,6 @@
 package com.platon.browser.evm.bean;
 
+import com.platon.browser.bean.Receipt;
 import com.platon.contracts.ppos.dto.common.ErrorCode;
 import com.platon.protocol.core.DefaultBlockParameter;
 import com.platon.protocol.core.methods.response.Log;
@@ -9,7 +10,6 @@ import com.platon.rlp.solidity.RlpList;
 import com.platon.rlp.solidity.RlpString;
 import com.platon.rlp.solidity.RlpType;
 import com.platon.utils.Numeric;
-import com.platon.browser.bean.Receipt;
 import com.platon.browser.client.PlatOnClient;
 import com.platon.browser.elasticsearch.dto.Transaction;
 import com.platon.browser.enums.ContractDescEnum;

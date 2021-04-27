@@ -1,10 +1,10 @@
 package com.platon.browser.publisher;
 
+import com.platon.browser.bean.Receipt;
+import com.platon.browser.bean.ReceiptResult;
 import com.platon.browser.config.DisruptorConfig;
 import com.platon.protocol.core.methods.response.PlatonBlock;
 import com.platon.browser.AgentTestBase;
-import com.platon.browser.bean.Receipt;
-import com.platon.browser.bean.ReceiptResult;
 import com.platon.browser.bean.EpochMessage;
 import org.junit.Before;
 import org.junit.Test;
@@ -13,7 +13,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
 import java.util.List;

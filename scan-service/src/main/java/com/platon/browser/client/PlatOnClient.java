@@ -1,11 +1,11 @@
 package com.platon.browser.client;
 
+import com.platon.browser.bean.ReceiptResult;
 import com.platon.contracts.ppos.*;
 import com.platon.contracts.ppos.dto.resp.GovernParam;
 import com.platon.contracts.ppos.dto.resp.Node;
 import com.platon.protocol.core.methods.response.bean.EconomicConfig;
 import com.alibaba.fastjson.JSON;
-import com.platon.browser.bean.ReceiptResult;
 import com.platon.browser.exception.BusinessException;
 import com.platon.browser.exception.ConfigLoadingException;
 import lombok.Getter;

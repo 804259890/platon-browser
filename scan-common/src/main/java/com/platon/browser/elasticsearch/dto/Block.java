@@ -1,6 +1,8 @@
 package com.platon.browser.elasticsearch.dto;
 
 import com.alibaba.fastjson.annotation.JSONField;
+import com.platon.browser.bean.Receipt;
+import com.platon.protocol.core.methods.response.PlatonBlock;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -8,6 +10,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Data
 @Accessors(chain = true)
@@ -60,5 +64,15 @@ public class Block {
     public BigDecimal decimalReward() {
         return new BigDecimal(this.getReward());
     }
+
+    /**
+     * 序号ID,用于计算区块下的交易seq自增
+     */
+    AtomicLong seq;
+
+    @JSONField(serialize = false)
+    private List<com.platon.protocol.core.methods.response.Transaction> originTransactions;
+    @JSONField(serialize = false)
+    private Map<String, Receipt> receiptMap;
 
 }

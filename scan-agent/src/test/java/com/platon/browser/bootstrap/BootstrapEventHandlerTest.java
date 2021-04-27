@@ -2,7 +2,6 @@ package com.platon.browser.bootstrap;
 
 import com.platon.browser.AgentTestBase;
 import com.platon.browser.analyzer.BlockAnalyzer;
-import com.platon.browser.bean.CollectionBlock;
 import com.platon.browser.bean.ReceiptResult;
 import com.platon.browser.cache.AddressCache;
 import com.platon.browser.client.PlatOnClient;
