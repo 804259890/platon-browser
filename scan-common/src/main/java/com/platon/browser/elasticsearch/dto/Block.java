@@ -7,10 +7,7 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Data
@@ -71,8 +68,8 @@ public class Block {
     AtomicLong seq;
 
     @JSONField(serialize = false)
-    private List<com.platon.protocol.core.methods.response.Transaction> originTransactions;
+    private List<com.platon.protocol.core.methods.response.Transaction> originTransactions = Collections.emptyList();
     @JSONField(serialize = false)
-    private Map<String, Receipt> receiptMap;
+    private Map<String, Receipt> receiptMap = Collections.emptyMap();
 
 }
