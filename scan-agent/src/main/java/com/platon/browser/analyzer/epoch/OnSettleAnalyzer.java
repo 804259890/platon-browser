@@ -128,12 +128,6 @@ public class OnSettleAnalyzer {
 //            	exitedNodeIds.add(staking.getNodeId());
 //            }
 
-            //当前质押是上轮结算周期验证人,发放本结算周期的质押奖励, 奖励金额暂存至stakeReward变量
-            BigDecimal curSettleStakeReward = BigDecimal.ZERO;
-            if(settle.getPreVerifierSet().contains(staking.getNodeId())){
-                curSettleStakeReward = settle.getStakingReward();
-            }
-
             //当前质押是下轮结算周期验证人
             if(settle.getCurVerifierSet().contains(staking.getNodeId())){
                 staking.setIsSettle(CustomStaking.YesNoEnum.YES.getCode());
@@ -141,30 +135,42 @@ public class OnSettleAnalyzer {
                 staking.setIsSettle(CustomStaking.YesNoEnum.NO.getCode());
             }
 
-            // 设置当前质押的总委托奖励，从节点上取出来的委托总奖励就是当前质押获取的总委托奖励
+            // 设置发放给当前质押节点的质押奖励金额
+            BigDecimal curSettleStakeReward = BigDecimal.ZERO;
+            if(settle.getPreVerifierSet().contains(staking.getNodeId())){
+                // 如果当前质押节点在上一个结算周期是验证人，则发放的质押奖励是上一个周期算出来的平均质押奖励
+                curSettleStakeReward = settle.getStakingReward();
+            }
+
+            // ***************** 先设置好：上一结算周期的【委托奖励总和】、【委托成本】 *******************
+            // 截至当前结算块号为止，当前质押的总委托数量（先从特殊节点查，特殊节点没有则从staking表相关字段拿）
             Node node = preVerifierMap.get(staking.getNodeId());
             BigDecimal curTotalDelegateCost = BigDecimal.ZERO;
             if(node!=null) {
+                // 当前质押节点是前一结算周期验证人，则总委托奖励设置为从特殊节点查出来的总委托奖励
                 staking.setTotalDeleReward(new BigDecimal(node.getDelegateRewardTotal()));
-                /**
-                 * 当底层查询出来的委托数为0时，则成本使用staking中的委托数
-                 */
                 if(BigInteger.ZERO.compareTo(node.getDelegateTotal()) == 0) {
+                    // 如果从特殊节点查出来的总委托数量为0，则使用当前质押的【锁定委托+犹豫委托】作为成本
                 	curTotalDelegateCost = staking.getStatDelegateLocked().add(staking.getStatDelegateHes());
                 } else {
+                    // 如果从特殊节点查出来的总委托数量不为0，则使用从特殊节点查出来的委托数作为成本
                 	curTotalDelegateCost = new BigDecimal(node.getDelegateTotal());
                 }
             } else {
-            	/**
-                 * 当底层查询出来的委托数为0时，则成本使用staking中的委托数
-                 */
+                // 当前质押节点不是前一结算周期验证人，则使用当前质押的【锁定委托+犹豫委托】作为成本
             	curTotalDelegateCost = staking.getStatDelegateLocked().add(staking.getStatDelegateHes());
             }
 
+            // ***************** 再进行质押和委托的年化率计算 *******************
             // 计算节点质押年化率
             calcStakeAnnualizedRate(staking,curSettleStakeReward,settle);
             // 计算委托年化率
             calcDelegateAnnualizedRate(staking,curTotalDelegateCost,settle);
+
+            // 把当前staking的stakingRewardValue的值置为当前结算周期的质押奖励值，累加操作由mapper xmm中的SQL语句完成
+            // staking表：【`staking_reward_value` =  `staking_reward_value` + #{staking.stakingRewardValue}】
+            // node表：【`stat_staking_reward_value` = `stat_staking_reward_value` + #{staking.stakingRewardValue}】
+            staking.setStakingRewardValue(curSettleStakeReward);
         });
         settle.setStakingList(stakingList);
         settle.setExitNodeList(exitedNodeIds);
@@ -193,6 +199,7 @@ public class OnSettleAnalyzer {
         log.debug("处理耗时:{} ms",System.currentTimeMillis()-startTime);
 
         try {
+            // 检查链上生效版本大于等于配置文件中指定的版本，则插入锁仓最小释放金额参数
             restrictingMinimumReleaseParamService.checkRestrictingMinimumReleaseParam(block);
         } catch (Exception e) {
             log.error("检查链上生效版本出错：",e);
@@ -203,100 +210,61 @@ public class OnSettleAnalyzer {
 
     /**
      * 计算节点质押年化率
-     * @param staking
-     * @param curSettleStakeReward
-     * @param settle
+     * @param staking 当前质押
+     * @param curSettleStakeReward 当前结算周期的质押奖励
+     * @param settle 当前结算周期信息
      */
 	private void calcStakeAnnualizedRate(Staking staking,BigDecimal curSettleStakeReward,Settle settle){
-        // 设置发放质押奖励后的金额，用于年化率计算
+        // 设置发放质押奖励后的累计质押奖励金额，用于年化率计算
         staking.setStakingRewardValue(staking.getStakingRewardValue().add(curSettleStakeReward));
         // 解析年化率信息对象
         String ariString = staking.getAnnualizedRateInfo();
         AnnualizedRateInfo ari = StringUtils.isNotBlank(ariString)?JSON.parseObject(ariString,AnnualizedRateInfo.class):new AnnualizedRateInfo();
-        if(ari.getStakeProfit()==null) ari.setStakeProfit(new ArrayList<>());
-        if(ari.getStakeCost()==null) ari.setStakeCost(new ArrayList<>());
-        if(ari.getSlash()==null) ari.setSlash(new ArrayList<>());
 
-        // 默认当前节点在下一轮结算周期不是验证人,其在下一轮结算周期的质押成本为0
-        BigDecimal curSettleCost = BigDecimal.ZERO;
-//        if(settle.getCurVerifierSet().contains(staking.getNodeId())){
-            // 如果当前节点在下一轮结算周期还是验证人,则记录下一轮结算周期的质押成本
-            // 计算当前质押成本 成本暂时不需要委托
-            curSettleCost = staking.getStakingLocked() // 锁定的质押金
-                    .add(staking.getStakingHes()); // 犹豫期的质押金
-//                    .add(staking.getStatDelegateHes()) // 犹豫期的委托金
-//                    .add(staking.getStatDelegateLocked()); // 锁定的委托金
 
-//        }
-        // 轮换下一结算周期的成本信息
-        CalculateUtils.rotateCost(ari.getStakeCost(),curSettleCost,BigInteger.valueOf(settle.getSettingEpoch()),chainConfig);
+        // 累计质押奖励: 所有（包含当前）结算周期的质押奖励总和
+        BigDecimal cumulativeStakeProfit = staking.getStakingRewardValue() // 截至当前结算周期节点的累计质押奖励
+                        .add(staking.getBlockRewardValue()) // + 截至当前结算周期节点的累计出块奖励
+                        .add(staking.getFeeRewardValue()) // + 截至当前结算周期节点的累计手续费奖励
+                        .subtract(staking.getTotalDeleReward()); // - 截至当前结算周期节点的累计委托奖励总和
 
-        // 计算当前质押的年化率 START ******************************
-        // 打地基 START -- 这样收益总和才有减数基础
-        layFoundation(ari.getStakeProfit(),settle.getSettingEpoch());
-
-        if(ari.getSlash()==null) ari.setSlash(new ArrayList<>());
-        // 打地基 END
-
-        // 默认节点在上一周期的收益为零
-        BigDecimal curSettleStakeProfit = BigDecimal.ZERO;
-        if(settle.getPreVerifierSet().contains(staking.getNodeId())){
-            // 如果当前节点在前一轮结算周期，则计算真实收益
-            curSettleStakeProfit = staking.getStakingRewardValue() // 质押奖励
-                    .add(staking.getBlockRewardValue()) // + 出块奖励
-                    .add(staking.getFeeRewardValue()) // + 手续费奖励
-                    .subtract(staking.getTotalDeleReward()); // - 当前结算周期的委托奖励总和
-        }
-        // 轮换质押收益信息，把当前节点在上一周期的收益放入轮换信息里
-        CalculateUtils.rotateProfit(ari.getStakeProfit(),curSettleStakeProfit,BigInteger.valueOf(settle.getSettingEpoch()-1L),chainConfig);
+        // 把当前节点在上一结算周期收益放入轮换信息里
+        CalculateUtils.rotateProfit(ari.getStakeProfit(),cumulativeStakeProfit,BigInteger.valueOf(settle.getSettingEpoch()-1L),chainConfig);
         // 计算年化率
         BigDecimal annualizedRate = CalculateUtils.calculateAnnualizedRate(ari.getStakeProfit(),ari.getStakeCost(),chainConfig);
         // 设置年化率
         staking.setAnnualizedRate(annualizedRate.doubleValue());
         // 计算当前质押的年化率 END ******************************
 
+
+
+        // 设置下一结算周期节点的质押成本 = 锁定质押 + 犹豫质押
+        BigDecimal curSettleStakeCost = staking.getStakingLocked() // 锁定的质押金
+                .add(staking.getStakingHes()); // 犹豫期的质押金
+        // 轮换下一结算周期的成本信息
+        CalculateUtils.rotateCost(ari.getStakeCost(),curSettleStakeCost,BigInteger.valueOf(settle.getSettingEpoch()),chainConfig);
+
+
+
         // 更新年化率计算原始信息
         staking.setAnnualizedRateInfo(ari.toJSONString());
-
-        // 把当前staking的stakingRewardValue的值置为当前结算周期的质押奖励值，累加操作由mapper xmm中的SQL语句完成
-        // staking表：【`staking_reward_value` =  `staking_reward_value` + #{staking.stakingRewardValue}】
-        // node表：【`stat_staking_reward_value` = `stat_staking_reward_value` + #{staking.stakingRewardValue}】
-        staking.setStakingRewardValue(curSettleStakeReward);
     }
 
     /**
      * 计算委托年化率
      * @param staking 当前质押记录
-     * @param curTotalDelegateCost 节点在当前结算周期的总委托数额
+     * @param curTotalDelegateCost 节点在当前结算周期的总委托成本
      * @param settle 周期切换业务参数
      */
     private void calcDelegateAnnualizedRate(Staking staking,BigDecimal curTotalDelegateCost,Settle settle){
-        //计算委托年化率
         // 解析年化率信息对象
         String ariString = staking.getAnnualizedRateInfo();
         AnnualizedRateInfo ari = StringUtils.isNotBlank(ariString)?JSON.parseObject(ariString,AnnualizedRateInfo.class):new AnnualizedRateInfo();
-        if(ari.getDelegateProfit()==null) ari.setDelegateProfit(new ArrayList<>());
-        if(ari.getDelegateCost()==null) ari.setDelegateCost(new ArrayList<>());
 
-        // 默认当前节点在下一轮结算周期不是验证人,其在下一轮结算周期的委托成本为0
-        BigDecimal curDelegateCost = BigDecimal.ZERO;
-//        if(settle.getCurVerifierSet().contains(staking.getNodeId())){
-            // 如果当前节点在下一轮结算周期还是验证人,则记录下一轮结算周期的委托成本, 委托成本以参数传进来的curTotalDelegateCost为准
-            curDelegateCost = curTotalDelegateCost;
-//        }
-        // 轮换下一结算周期的成本信息
-        CalculateUtils.rotateCost(ari.getDelegateCost(),curDelegateCost,BigInteger.valueOf(settle.getSettingEpoch()),chainConfig);
-
-        // 计算当前委托的年化率 START ******************************
-        layFoundation(ari.getDelegateProfit(),settle.getSettingEpoch());
-
-        // 默认节点在上一周期的委托收益为零
-        BigDecimal curSettleDelegateProfit = BigDecimal.ZERO;
-        if(settle.getPreVerifierSet().contains(staking.getNodeId())){
-            curSettleDelegateProfit = staking.getTotalDeleReward();
-        }
+        // 累计委托奖励: 所有（包含当前）结算周期的委托奖励总和
+        BigDecimal cumulativeDelegateProfit = staking.getTotalDeleReward();
         // 轮换委托收益信息，把当前节点在上一周期的委托收益放入轮换信息里
-        CalculateUtils.rotateProfit(ari.getDelegateProfit(),curSettleDelegateProfit,BigInteger.valueOf(settle.getSettingEpoch()-1L),chainConfig);
+        CalculateUtils.rotateProfit(ari.getDelegateProfit(),cumulativeDelegateProfit,BigInteger.valueOf(settle.getSettingEpoch()-1L),chainConfig);
         // 计算年化率
         BigDecimal annualizedRate = CalculateUtils.calculateAnnualizedRate(ari.getDelegateProfit(),ari.getDelegateCost(),chainConfig);
         // 把前一周期的委托奖励年化率设置至preDeleAnnualizedRate字段
@@ -305,22 +273,13 @@ public class OnSettleAnalyzer {
         staking.setDeleAnnualizedRate(annualizedRate.doubleValue());
         // 计算当前质押的年化率 END ******************************
 
+
+        // 设置下一结算周期节点的委托成本
+        CalculateUtils.rotateCost(ari.getDelegateCost(),curTotalDelegateCost,BigInteger.valueOf(settle.getSettingEpoch()),chainConfig);
+
+
         // 更新年化率计算原始信息
         staking.setAnnualizedRateInfo(ari.toJSONString());
-    }
-
-    // 打地基
-    private void layFoundation(List<PeriodValueElement> pves, int settleEpoch){
-        // 打地基 START -- 这样收益总和才有减数基础
-        if(pves.isEmpty()) {
-            // 设置0收益作为计算周期间收益的减数
-            PeriodValueElement pv = new PeriodValueElement();
-            // 例如当前是第6个周期，要得出5和6两个周期的利润和，则需要记录第4个周期末的利润，这样才可以用【第6个周期末的利润】-【第4个周期末的利润】计算出5和6两个周期的利润和
-            pv.setPeriod(settleEpoch-2L);
-            pv.setValue(BigDecimal.ZERO);
-            pves.add(pv);
-        }
-        // 打地基 END
     }
 
     /**

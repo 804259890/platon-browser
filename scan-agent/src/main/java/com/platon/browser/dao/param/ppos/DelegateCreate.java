@@ -32,6 +32,9 @@ public class DelegateCreate implements BusinessParam {
     //节点质押快高
     private BigInteger stakingBlockNumber;
 
+    // 2021/05/19: 年化率计算信息，每个节点刚质押进来时，都可以确定其在下一个结算周期生效时的质押成本和委托成本
+    private String annualizedRateInfo;
+
     @Override
     public BusinessType getBusinessType() {
         return BusinessType.DELEGATE_CREATE;

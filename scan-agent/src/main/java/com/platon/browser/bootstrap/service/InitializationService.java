@@ -220,21 +220,15 @@ public class InitializationService {
             // 更新年化率信息, 由于是周期开始，所以只记录成本，收益需要在结算周期切换时算
             AnnualizedRateInfo ari = new AnnualizedRateInfo();
             // |- 质押的成本
-            List<PeriodValueElement> stakeCosts = new ArrayList<>();
-            stakeCosts.add(new PeriodValueElement().setPeriod(0L).setValue(BigDecimal.ZERO));
             BigDecimal stakeCostVal = staking.getStakingLocked() // 锁定的质押金
                 .add(staking.getStakingHes()) // 犹豫期的质押金
                 .add(staking.getStatDelegateHes()) // 犹豫期的委托金
                 .add(staking.getStatDelegateLocked()); // 锁定的委托金
-            stakeCosts.add(new PeriodValueElement().setPeriod(1L).setValue(stakeCostVal));
-            ari.setStakeCost(stakeCosts);
+            ari.getStakeCost().add(new PeriodValueElement().setPeriod(1L).setValue(stakeCostVal));
             // |- 委托的成本
-            List<PeriodValueElement> delegateCosts = new ArrayList<>();
-            delegateCosts.add(new PeriodValueElement().setPeriod(0L).setValue(BigDecimal.ZERO));
             BigDecimal delegateCostVal = staking.getStatDelegateLocked() // 锁定的委托金
                 .add(staking.getStatDelegateHes()); // 犹豫期的委托金
-            delegateCosts.add(new PeriodValueElement().setPeriod(1L).setValue(delegateCostVal));
-            ari.setDelegateCost(delegateCosts);
+            ari.getDelegateCost().add(new PeriodValueElement().setPeriod(1L).setValue(delegateCostVal));
 
             staking.setAnnualizedRateInfo(ari.toJSONString());
             staking.setPredictStakingReward(epochRetryService.getStakeReward());

@@ -22,17 +22,18 @@ public class AnnualizedRateInfoTest {
 
     @Test
     public void test(){
+        AnnualizedRateInfo ari = new AnnualizedRateInfo();
         PeriodValueElement profit = new PeriodValueElement();
         profit.setPeriod(100L);
         profit.setValue(BigDecimal.TEN);
-        List<PeriodValueElement> profitList = new ArrayList <>();
-        profitList.add(profit);
+        ari.getStakeProfit().add(profit);
         assertEquals(profit.getPeriod().longValue(),100L);
+
         PeriodValueElement cost = new PeriodValueElement();
         cost.setPeriod(120L);
         cost.setValue(BigDecimal.TEN);
         List<PeriodValueElement> costList = new ArrayList <>();
-        costList.add(cost);
+        ari.getStakeCost().add(cost);
         SlashInfo slash = new SlashInfo();
         slash.setSlashTime(new Date());
         slash.setBlockCount(BigInteger.ONE);
@@ -40,14 +41,6 @@ public class AnnualizedRateInfoTest {
         slash.setKickOut(false);
         slash.setSlashAmount(BigDecimal.TEN);
         slash.setSlashBlockCount(BigInteger.ONE);
-        List<SlashInfo> slashList = new ArrayList <>();
-        slashList.add(slash);
-        AnnualizedRateInfo annualizedRateInfo = new AnnualizedRateInfo();
-        annualizedRateInfo.setStakeCost(profitList);
-        annualizedRateInfo.setStakeProfit(costList);
-        annualizedRateInfo.setSlash(slashList);
-
+        ari.getSlash().add(slash);
     }
-
-
 }

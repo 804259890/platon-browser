@@ -1,8 +1,10 @@
 package com.platon.browser.analyzer.ppos;
 
-import com.platon.browser.cache.NetworkStatCache;
-import com.platon.browser.bean.ComplementNodeOpt;
+import com.platon.browser.bean.AnnualizedRateInfo;
 import com.platon.browser.bean.CollectionEvent;
+import com.platon.browser.bean.ComplementNodeOpt;
+import com.platon.browser.bean.PeriodValueElement;
+import com.platon.browser.cache.NetworkStatCache;
 import com.platon.browser.dao.mapper.StakeBusinessMapper;
 import com.platon.browser.dao.param.ppos.StakeCreate;
 import com.platon.browser.elasticsearch.dto.NodeOpt;
@@ -11,15 +13,16 @@ import com.platon.browser.enums.ModifiableGovernParamEnum;
 import com.platon.browser.exception.BusinessException;
 import com.platon.browser.param.StakeCreateParam;
 import com.platon.browser.service.govern.ParameterService;
-import com.platon.browser.utils.DateUtil;
 import com.platon.browser.service.ppos.StakeEpochService;
-import com.platon.browser.utils.HexUtil;
 import com.platon.browser.utils.ChainVersionUtil;
+import com.platon.browser.utils.DateUtil;
+import com.platon.browser.utils.HexUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Date;
 
@@ -62,7 +65,8 @@ public class StakeCreateAnalyzer extends PPOSAnalyzer<NodeOpt> {
 		BigInteger  unStakeFreezeDuration = stakeEpochService.getUnStakeFreeDuration();
 		// 理论上的退出区块号
 		BigInteger unStakeEndBlock = stakeEpochService.getUnStakeEndBlock(txParam.getNodeId(),event.getEpochMessage().getSettleEpochRound(),false);
-        StakeCreate businessParam= StakeCreate.builder()
+
+		StakeCreate businessParam= StakeCreate.builder()
         		.nodeId(txParam.getNodeId())
         		.stakingHes(txParam.getAmount())
         		.nodeName(txParam.getNodeName())
@@ -83,6 +87,17 @@ public class StakeCreateAnalyzer extends PPOSAnalyzer<NodeOpt> {
 				.unStakeEndBlock(unStakeEndBlock)
 				.settleEpoch(event.getEpochMessage().getSettleEpochRound().intValue())
                 .build();
+
+
+// 2020/05/19 14:39:10 START*************************************************************************
+		// 年化率计算信息，每个节点刚质押进来时，都可以确定其在下一个结算周期生效时的质押成本
+		Long nextSettleEpochRound = event.getEpochMessage().getSettleEpochRound().longValue()+1;
+		AnnualizedRateInfo ari = new AnnualizedRateInfo();
+		// 节点在下一结算周期的质押成本, 由于是刚质押进来，所以取当前结算周期只有犹豫期金额（即质押交易的参数值）
+		BigDecimal nextSettleStakeCost = businessParam.getStakingHes();
+		ari.getStakeCost().add(new PeriodValueElement().setPeriod(nextSettleEpochRound).setValue(nextSettleStakeCost));
+		businessParam.setAnnualizedRateInfo(ari.toJSONString());
+// 2020/05/19 14:39:10 END*************************************************************************
 
         stakeBusinessMapper.create(businessParam);
         
